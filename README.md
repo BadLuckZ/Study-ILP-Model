@@ -3,7 +3,7 @@
 1. Open your folder you want then clone this project
 
 ```sh
-git clone ...
+git clone https://github.com/BadLuckZ/Study-ILP-Model.git
 ```
 
 2. Go inside this project then install packages
