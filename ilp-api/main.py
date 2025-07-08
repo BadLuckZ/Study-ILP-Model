@@ -5,7 +5,7 @@ from pulp import *
 
 app = FastAPI()
 
-# ตั้งค่า CORS เพื่อให้ frontend (เช่น React) ที่รันบน localhost:4321 เรียก API ได้
+# ตั้งค่า CORS Update
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:4321"],
@@ -17,8 +17,6 @@ app.add_middleware(
 # ค่าคะแนนของ preference (อันดับ 1-5)
 PREF_SCORES = [100, 50, 30, 15, 5]
 SUB_PREF_SCORE = 3  # คะแนน subPreference
-OVERFLOW_LIMIT_RATIO = 0  # ไม่อนุญาต overflow
-OVERFLOW_PENALTY = 50     # ไม่ได้ใช้จริง
 
 # -------------------- ปลายทาง solve_va --------------------
 @app.post("/api/solve_va")
@@ -32,15 +30,15 @@ async def solve_va(request: Request):
 
     # ฟังก์ชันช่วยเช็คว่าบ้านยังรับได้หรือไม่
     def can_assign(hid, group_size):
-        return assigned_house_total[hid] + group_size <= houses[hid]["max"]
+        return assigned_house_total[hid] + group_size <= houses[hid]["capacity"]
 
-    # รอบที่ 1: พยายามยัดบ้านอันดับ 1 ที่ยังไม่ถึง min
+    # รอบที่ 1: พยายามยัดบ้านอันดับ 1 ที่ยังไม่เต็ม
     unassigned = []
     for g in groups:
         gid = g["id"]
         prefs = g.get("preference", [])
         top = prefs[0] if prefs else None
-        if top is not None and assigned_house_total[top] + g["size"] <= houses[top]["min"]:
+        if top is not None and can_assign(top, g["size"]):
             assigned[gid] = top
             assigned_house_total[top] += g["size"]
         else:
@@ -82,17 +80,16 @@ async def solve_va(request: Request):
         for gid in allowed_houses_for_group:
             prob += lpSum(x[(gid, h)] for h in allowed_houses_for_group[gid]) == 1
 
-        # constraint: ความจุบ้านห้ามเกิน max
+        # constraint: ความจุบ้านห้ามเกิน capacity
         for h in houses:
             prob += (
                 lpSum(
                     x[(gid, h)] * group_size_map[gid]
                     for gid in allowed_houses_for_group if (gid, h) in x
                 ) + assigned_house_total[h]
-                <= houses[h]["max"]
+                <= houses[h]["capacity"]
             )
 
-        # Solve LP
         prob.solve(PULP_CBC_CMD(msg=0))  # ปิด log
 
         # เก็บผลลัพธ์จาก LP
@@ -118,6 +115,7 @@ async def solve_va(request: Request):
         gid = g["id"]
         assigned_house = None
 
+        # พยายามยัดบ้าน subPreference ก่อน
         for h in g.get("subPreference", []):
             if can_assign(h, g["size"]):
                 assigned[gid] = h
@@ -125,6 +123,7 @@ async def solve_va(request: Request):
                 assigned_house = h
                 break
 
+        # ถ้ายังไม่ได้ ให้หาบ้านที่ยังว่าง
         if assigned_house is None:
             for h in houses:
                 if can_assign(h, g["size"]):
@@ -133,6 +132,7 @@ async def solve_va(request: Request):
                     assigned_house = h
                     break
 
+        # ถ้ายังไม่ได้จริงๆ ให้ None
         if assigned_house is None:
             assigned[gid] = None
 
@@ -145,7 +145,7 @@ async def solve_vb(request: Request):
     groups = data["groups"]
     houses = {int(k): v for k, v in data["houses"].items()}
 
-    remaining_capacity = {h: houses[h]["max"] for h in houses}
+    remaining_capacity = {h: houses[h]["capacity"] for h in houses}
     result = {}
 
     prob = LpProblem("FullGroupAssignment", LpMaximize)
@@ -165,7 +165,7 @@ async def solve_vb(request: Request):
         for h in allowed:
             x[(gid, h)] = LpVariable(f"x_{gid}_{h}", cat=LpBinary)
 
-    # objective function
+    # objective function: รวมคะแนน preference/subPreference
     prob += lpSum(
         x[(gid, h)] * (
             PREF_SCORES[preference_index_cache[gid][h]] if h in preference_index_cache[gid]
@@ -178,12 +178,12 @@ async def solve_vb(request: Request):
     for gid in group_size_map:
         prob += lpSum(x[(gid, h)] for (gidx, h) in x if gidx == gid) == 1
 
-    # constraint: ความจุบ้านห้ามเกิน
+    # constraint: ความจุบ้านห้ามเกิน capacity
     for h in houses:
         prob += lpSum(
             x[(gid, h)] * group_size_map[gid]
             for (gid, hh) in x if hh == h
-        ) <= houses[h]["max"]
+        ) <= houses[h]["capacity"]
 
     prob.solve(PULP_CBC_CMD(msg=0))  # ปิด log
 
