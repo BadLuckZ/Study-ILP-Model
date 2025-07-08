@@ -2,45 +2,31 @@ import { useEffect, useState } from "react";
 import { assignGroupsVa, assignGroupsVb } from "../lib/api";
 import * as XLSX from "xlsx";
 
-function shuffle(array) {
-  const arr = array.slice();
-  for (let i = arr.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [arr[i], arr[j]] = [arr[j], arr[i]];
-  }
-  return arr;
-}
-
-const HOUSE_NAMES = [
-  "บ้านอะอึ๋ม",
-  "บ้านสด",
-  "บ้านโจ๋",
-  "บ้านโบ้",
-  "บ้านดัง",
-  "บ้านคุณหนู",
-  "บ้านเดอะ",
-  "บ้านจิ๊จ๊ะ",
-  "บ้านคุ้ม",
-  "บ้านนอก",
-  "บ้านโจ๊ะเด๊ะ ฮือซา",
-  "บ้านว้อนท์",
-  "บ้านแจ๋ว",
-  "บ้านแรงส์",
-  "บ้านเฮา",
-  "บ้านเอช้วน",
-  "บ้านคิดส์",
-  "บ้านอากาเป้",
-  "บ้านโคะ",
-  "บ้านโซ้ยตี๋หลีหมวย",
-  "บ้านยิ้ม",
-  "บ้านหลายใจ",
+// --- Fixed house data ---
+const FIXED_HOUSES = [
+  { houseName: "บ้านว้อนท์", sizeName: "S", capacity: 32 * 3 }, // 96
+  { houseName: "บ้านคุณหนู", sizeName: "S", capacity: 41 * 3 }, // 123
+  { houseName: "บ้านโคะ", sizeName: "S", capacity: 41 * 3 }, // 123
+  { houseName: "บ้านดัง", sizeName: "S", capacity: 30 * 3 }, // 90
+  { houseName: "บ้านเดอะ", sizeName: "S", capacity: 38 * 3 }, // 114
+  { houseName: "บ้านหลายใจ", sizeName: "S", capacity: 45 * 3 }, // 135
+  { houseName: "บ้านอากาเป้", sizeName: "S", capacity: 32 * 3 }, // 96
+  { houseName: "บ้านนอก", sizeName: "M", capacity: 61 * 3 }, // 183
+  { houseName: "บ้านจิ๊จ๊ะ", sizeName: "M", capacity: 67 * 3 }, // 201
+  { houseName: "บ้านเอช้วน", sizeName: "M", capacity: 83 * 3 }, // 249
+  { houseName: "บ้านโจ๊ะเด๊ะฮือซา", sizeName: "M", capacity: 99 * 3 }, // 297
+  { houseName: "บ้านโบ้", sizeName: "S", capacity: 43 * 3 }, // 129
+  { houseName: "บ้านอะอึ๋ม", sizeName: "M", capacity: 84 * 3 }, // 252
+  { houseName: "บ้านคิดส์", sizeName: "L", capacity: 70 * 3 }, // 210
+  { houseName: "บ้านแจ๋ว", sizeName: "L", capacity: 119 * 3 }, // 357
+  { houseName: "บ้านสด", sizeName: "L", capacity: 108 * 3 }, // 324
+  { houseName: "บ้านเฮา", sizeName: "L", capacity: 119 * 3 }, // 357
+  { houseName: "บ้านคุ้ม", sizeName: "XL", capacity: 133 * 4 }, // 532
+  { houseName: "บ้านโจ๋", sizeName: "XL", capacity: 198 * 4 }, // 792
+  { houseName: "บ้านโซ้ยตี๋หลีหมวย", sizeName: "XL", capacity: 196 * 4 }, // 784
+  { houseName: "บ้านแรงส์", sizeName: "XXL", capacity: 312 * 4 }, // 1248
+  { houseName: "บ้านยิ้ม", sizeName: "XXL", capacity: 201 * 4 }, // 804
 ];
-
-// ฟังก์ชันสุ่มชื่อโดยไม่ซ้ำ
-function getRandomNames(num, nameList) {
-  const arr = shuffle(nameList);
-  return arr.slice(0, num);
-}
 
 function weightedRandomPreference(maxPrefs) {
   const weights = { 1: 0.0125, 2: 0.0125, 3: 0.0125, 4: 0.0125, 5: 0.95 };
@@ -57,59 +43,18 @@ function weightedRandomPreference(maxPrefs) {
   return maxPrefs;
 }
 
-function generateDivisibleRandomFast(min, max, divisor) {
-  const start = Math.ceil(min / divisor);
-  const end = Math.floor(max / divisor);
-  const count = end - start + 1;
-  if (count <= 0) return divisor;
-  const rand = Math.floor(Math.random() * count);
-  return (start + rand) * divisor;
+function shuffle(array) {
+  const arr = array.slice();
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
 }
 
-// ฟังก์ชันสุ่มบ้าน
-function generateRandomHouses(numHouses) {
-  const sizeCategories = [
-    { name: "S", range: [140, 160], divisor: 3 },
-    { name: "M", range: [220, 260], divisor: 3 },
-    { name: "L", range: [300, 360], divisor: 3 },
-    { name: "XL", range: [500, 600], divisor: 3 },
-    { name: "2XL", range: [900, 1100], divisor: 4 },
-  ];
-
-  const sizeDistribution = [
-    ...Array(10).fill(sizeCategories.find((s) => s.name === "S")),
-    ...Array(3).fill(sizeCategories.find((s) => s.name === "M")),
-    ...Array(4).fill(sizeCategories.find((s) => s.name === "L")),
-    ...Array(3).fill(sizeCategories.find((s) => s.name === "XL")),
-    ...Array(2).fill(sizeCategories.find((s) => s.name === "2XL")),
-  ];
-
-  if (numHouses !== sizeDistribution.length) {
-    throw new Error("จำนวนบ้านไม่ตรงกับการกระจายขนาดที่ระบุ");
-  }
-
-  const houseNames = getRandomNames(numHouses, HOUSE_NAMES);
-
-  const rawHouseList = [];
-  for (let i = 0; i < numHouses; i++) {
-    const selected = sizeDistribution[i];
-    const { range, divisor } = selected;
-    // ใช้ capacity เดียว ไม่ต้อง min/max
-    const capacity = generateDivisibleRandomFast(range[0], range[1], divisor);
-    rawHouseList.push({
-      houseName: houseNames[i],
-      sizeName: selected.name,
-      range: range,
-      divisor,
-      capacity,
-    });
-  }
-  return rawHouseList;
-}
-
-// ฟังก์ชันสุ่มกลุ่ม
-function generateRandomGroups(numGroups, numHouses, rawHouseList) {
+function generateRandomGroups(numGroups, numHouses, housesObj) {
   const numSubPreference = 1;
+  // House IDs should start from 1 to 22
   const houseIds = Array.from({ length: numHouses }, (_, i) => i + 1);
 
   // สร้าง id ที่ไม่ซ้ำกัน
@@ -125,10 +70,10 @@ function generateRandomGroups(numGroups, numHouses, rawHouseList) {
   for (let gid = 0; gid < numGroups; gid++) {
     const size = Math.floor(Math.random() * 3) + 1;
     const prefs = shuffle(houseIds).slice(0, weightedRandomPreference(5));
-    const xl2xlHouses = rawHouseList
-      .map((h, idx) => ({ id: idx + 1, sizeName: h.sizeName }))
-      .filter((h) => h.sizeName === "XL" || h.sizeName === "2XL")
-      .map((h) => h.id);
+
+    const xl2xlHouses = Object.entries(housesObj)
+      .filter(([id, h]) => h.sizeName === "XL" || h.sizeName === "XXL")
+      .map(([id]) => parseInt(id));
     const subPreference = shuffle(
       xl2xlHouses.filter((id) => !prefs.includes(id))
     ).slice(0, numSubPreference);
@@ -153,47 +98,17 @@ function generateRandomGroups(numGroups, numHouses, rawHouseList) {
   return groups;
 }
 
-function generateData(numGroups, numHouses) {
-  // สุ่มบ้าน
-  const rawHouseList = generateRandomHouses(numHouses);
-
-  // สุ่มกลุ่ม
-  const groups = generateRandomGroups(numGroups, numHouses, rawHouseList);
-
-  // ปรับ max/min ของบ้านให้รองรับจำนวนสมาชิกกลุ่ม
-  const totalMembers = groups.reduce((sum, g) => sum + g.size, 0);
-  let totalMax = rawHouseList.reduce((sum, h) => sum + h.max, 0);
-  let iteration = 0;
-  const maxIterations = rawHouseList.length * 20;
-
-  while (totalMax < totalMembers && iteration < maxIterations) {
-    const h = rawHouseList[iteration % rawHouseList.length];
-    const newMax = h.capacity + h.divisor;
-    if (newMax <= h.range[1]) {
-      totalMax += h.divisor;
-      h.capacity = newMax;
-    }
-    iteration++;
-  }
-
+// --- Main data generation using fixed houses ---
+function generateData(numGroups) {
+  // เปลี่ยน houses เป็น object ที่ key เป็น 1-22
+  const housesArr = FIXED_HOUSES;
   const houses = {};
-  rawHouseList.forEach((h, idx) => {
-    houses[idx + 1] = {
-      capacity: h.capacity,
-      sizeName: h.sizeName,
-      houseName: h.houseName,
-    };
-  });
-
+  for (let i = 0; i < housesArr.length; i++) {
+    houses[i + 1] = housesArr[i];
+  }
+  const numHouses = Object.keys(houses).length;
+  const groups = generateRandomGroups(numGroups, numHouses, houses);
   return { groups, houses };
-}
-
-// --- Export to Excel helper ---
-function exportTableToExcel(tableId, tableName, filename) {
-  const table = document.getElementById(tableId);
-  if (!table) return;
-  const wb = XLSX.utils.table_to_book(table, { sheet: "Sheet1" });
-  XLSX.writeFile(wb, filename);
 }
 
 // --- Export all tables to a single Excel file ---
@@ -274,13 +189,11 @@ export default function AssignPanel() {
   const [loadingVa, setLoadingVa] = useState(false);
   const [loadingVb, setLoadingVb] = useState(false);
 
-  const numHouses = 22;
-
   useEffect(() => {
-    setData(generateData(numGroups, numHouses));
+    setData(generateData(numGroups));
     setResultVa(null);
     setResultVb(null);
-  }, [numGroups, numHouses]);
+  }, [numGroups]);
 
   if (!data) return <p>Loading...</p>;
 
@@ -332,40 +245,13 @@ export default function AssignPanel() {
   const houseTotalsVa = calculateHouseTotals(resultVa);
   const houseTotalsVb = calculateHouseTotals(resultVb);
 
-  const calculateSummary = (result) => {
-    const summary = {
-      rank1: 0,
-      rank2: 0,
-      rank3: 0,
-      rank4: 0,
-      rank5: 0,
-      subPref: 0,
-      unranked: 0,
-    };
-
-    if (result) {
-      for (const group of data.groups) {
-        const assigned = result[group.id];
-        const index = group.preference.indexOf(assigned);
-        if (index === 0) summary.rank1++;
-        else if (index === 1) summary.rank2++;
-        else if (index === 2) summary.rank3++;
-        else if (index === 3) summary.rank4++;
-        else if (index === 4) summary.rank5++;
-        else if (group.subPreference.includes(assigned)) summary.subPref++;
-        else summary.unranked++;
-      }
-    }
-    return summary;
-  };
-
   const houseSizeCount = {};
   Object.values(data.houses).forEach((house) => {
     houseSizeCount[house.sizeName] = (houseSizeCount[house.sizeName] || 0) + 1;
   });
 
   const calculatePercentage = (num, total) =>
-    total ? ((num / total) * 100).toFixed(2) : "0.00";
+    total ? ((num / total) * 100).toFixed(2) : "0.00%";
 
   return (
     <div style={{ fontFamily: "'Segoe UI', sans-serif", padding: "1rem" }}>
@@ -400,7 +286,7 @@ export default function AssignPanel() {
         </button>
         <button
           onClick={() => {
-            setData(generateData(numGroups, numHouses));
+            setData(generateData(numGroups));
             setResultVa(null);
             setResultVb(null);
           }}
@@ -684,7 +570,7 @@ export default function AssignPanel() {
           </tr>
         </thead>
         <tbody>
-          {Object.entries(data.houses).map(([hid, h]) => (
+          {Object.entries(data.houses).map(([hid, h], idx) => (
             <tr key={hid}>
               <td style={thTdStyle}>{hid}</td>
               <td style={thTdStyle}>{h.houseName}</td>
@@ -735,8 +621,10 @@ export default function AssignPanel() {
             <th style={headerStyle}>Sub Pref</th>
             <th style={headerStyle}>Va House ID</th>
             <th style={headerStyle}>Va Assigned</th>
+            <th style={headerStyle}>Va Rank</th>
             <th style={headerStyle}>Vb House ID</th>
             <th style={headerStyle}>Vb Assigned</th>
+            <th style={headerStyle}>Vb Rank</th>
           </tr>
         </thead>
         <tbody>
@@ -759,12 +647,18 @@ export default function AssignPanel() {
             });
 
             // แสดงชื่อบ้านที่ได้พร้อมอันดับที่ได้
-            const getAssignedDisplay = (assigned, index, isSubPref) => {
+            const getHouseDisplay = (assigned, index, isSubPref) => {
               if (!assigned) return "-";
               const houseName = data.houses[assigned]?.houseName || assigned;
-              if (index >= 0) return `${houseName} (อันดับ ${index + 1})`;
-              if (isSubPref) return `${houseName} (Sub)`;
-              return `${houseName} (นอกลำดับ)`;
+              return houseName;
+            };
+
+            // เพิ่มฟังก์ชันแสดงอันดับ
+            const getRankDisplay = (index, isSubPref, assigned) => {
+              if (!assigned) return "-";
+              if (index >= 0) return `${index + 1}`;
+              if (isSubPref) return "Sub";
+              return "นอกลำดับ";
             };
 
             // แยก Prefs เป็น 5 คอลัมน์
@@ -791,21 +685,47 @@ export default function AssignPanel() {
                 <td style={thTdStyle}>{g.size}</td>
                 {prefCols}
                 <td style={thTdStyle}>{g.subPreference.join(", ")}</td>
-                <td style={thTdStyle}>{assignedVa ?? "-"}</td>
                 <td
                   style={
                     assignedVa ? getCellStyle(indexVa, isSubPrefVa) : thTdStyle
                   }
                 >
-                  {getAssignedDisplay(assignedVa, indexVa, isSubPrefVa)}
+                  {assignedVa ?? "-"}
                 </td>
-                <td style={thTdStyle}>{assignedVb ?? "-"}</td>
+                <td
+                  style={
+                    assignedVa ? getCellStyle(indexVa, isSubPrefVa) : thTdStyle
+                  }
+                >
+                  {getHouseDisplay(assignedVa, indexVa, isSubPrefVa)}
+                </td>
+                <td
+                  style={
+                    assignedVa ? getCellStyle(indexVa, isSubPrefVa) : thTdStyle
+                  }
+                >
+                  {getRankDisplay(indexVa, isSubPrefVa, assignedVa)}
+                </td>
                 <td
                   style={
                     assignedVb ? getCellStyle(indexVb, isSubPrefVb) : thTdStyle
                   }
                 >
-                  {getAssignedDisplay(assignedVb, indexVb, isSubPrefVb)}
+                  {assignedVb ?? "-"}
+                </td>
+                <td
+                  style={
+                    assignedVb ? getCellStyle(indexVb, isSubPrefVb) : thTdStyle
+                  }
+                >
+                  {getHouseDisplay(assignedVb, indexVb, isSubPrefVb)}
+                </td>
+                <td
+                  style={
+                    assignedVb ? getCellStyle(indexVb, isSubPrefVb) : thTdStyle
+                  }
+                >
+                  {getRankDisplay(indexVb, isSubPrefVb, assignedVb)}
                 </td>
               </tr>
             );

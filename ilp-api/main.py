@@ -8,7 +8,7 @@ app = FastAPI()
 # ตั้งค่า CORS Update
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:4321"],
+    allow_origins=["http://localhost:4321", "http://localhost:8000"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -23,7 +23,13 @@ SUB_PREF_SCORE = 3  # คะแนน subPreference
 async def solve_va(request: Request):
     data = await request.json()
     groups = data["groups"]
-    houses = {int(h): v for h, v in data["houses"].items()}  # แปลง key ให้เป็น int
+    
+    if isinstance(data["houses"], dict):
+        houses = {int(k): v for k, v in data["houses"].items()}
+    elif isinstance(data["houses"], list):
+        houses = {i: h for i, h in enumerate(data["houses"])}
+    else:
+        raise Exception("Invalid houses format")
 
     assigned = {}  # เก็บผลลัพธ์การจัดกลุ่ม
     assigned_house_total = {hid: 0 for hid in houses}  # บ้านแต่ละหลังมีคนเท่าไร
@@ -143,7 +149,13 @@ async def solve_va(request: Request):
 async def solve_vb(request: Request):
     data = await request.json()
     groups = data["groups"]
-    houses = {int(k): v for k, v in data["houses"].items()}
+    
+    if isinstance(data["houses"], dict):
+        houses = {int(k): v for k, v in data["houses"].items()}
+    elif isinstance(data["houses"], list):
+        houses = {i: h for i, h in enumerate(data["houses"])}
+    else:
+        raise Exception("Invalid houses format")
 
     remaining_capacity = {h: houses[h]["capacity"] for h in houses}
     result = {}
@@ -185,7 +197,7 @@ async def solve_vb(request: Request):
             for (gid, hh) in x if hh == h
         ) <= houses[h]["capacity"]
 
-    prob.solve(PULP_CBC_CMD(msg=0))  # ปิด log
+    prob.solve(PULP_CBC_CMD(msg=0))
 
     # ตีความผลลัพธ์
     for g in groups:
