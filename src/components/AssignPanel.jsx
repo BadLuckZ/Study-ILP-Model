@@ -31,6 +31,8 @@ const FIXED_GROUPS = [
   // {
   //   id: "1",
   //   head_id: 20001,
+  //   member_id_1: 30001,
+  //   member_id_2: 30002,
   //   member_count: 3,
   //   house_rank_1: 1,
   //   house_rank_2: null,
@@ -38,6 +40,32 @@ const FIXED_GROUPS = [
   //   house_rank_4: null,
   //   house_rank_5: null,
   //   house_sub: null,
+  // },
+  // {
+  //   id: "2",
+  //   head_id: 20001,
+  //   member_id_1: 30003,
+  //   member_id_2: null,
+  //   member_count: 2,
+  //   house_rank_1: 1,
+  //   house_rank_2: 2,
+  //   house_rank_3: 18,
+  //   house_rank_4: null,
+  //   house_rank_5: null,
+  //   house_sub: 20,
+  // },
+  // {
+  //   id: "3",
+  //   head_id: 20003,
+  //   member_id_1: 30004,
+  //   member_id_2: null,
+  //   member_count: 2,
+  //   house_rank_1: 3,
+  //   house_rank_2: 1,
+  //   house_rank_3: 20,
+  //   house_rank_4: null,
+  //   house_rank_5: null,
+  //   house_sub: 21,
   // },
 ];
 
@@ -72,9 +100,36 @@ function generateRandomGroups(numGroups, numHouses, housesObj) {
     Array.from({ length: numGroups }, (_, i) => 20000 + i + 1)
   );
 
+  const usedMemberIds = new Set();
   const groups = [];
+  let nextMemberId = 30001;
+
   for (let gid = 0; gid < numGroups; gid++) {
     const member_count = Math.floor(Math.random() * 3) + 1;
+    const head_id = headIds[gid];
+
+    // Generate up to 2 unique member IDs, not equal to head_id and not used elsewhere
+    let member_id_1 = null,
+      member_id_2 = null;
+    if (member_count > 1) {
+      while (usedMemberIds.has(nextMemberId) || nextMemberId === head_id)
+        nextMemberId++;
+      member_id_1 = nextMemberId;
+      usedMemberIds.add(member_id_1);
+      nextMemberId++;
+    }
+    if (member_count > 2) {
+      while (
+        usedMemberIds.has(nextMemberId) ||
+        nextMemberId === head_id ||
+        nextMemberId === member_id_1
+      )
+        nextMemberId++;
+      member_id_2 = nextMemberId;
+      usedMemberIds.add(member_id_2);
+      nextMemberId++;
+    }
+
     const prefs = shuffle(houseIds).slice(0, weightedRandomPreference(5));
     const xl2xlHouses = Object.entries(housesObj)
       .filter(([id, h]) => h.sizeName === "XL" || h.sizeName === "XXL")
@@ -85,7 +140,9 @@ function generateRandomGroups(numGroups, numHouses, housesObj) {
 
     groups.push({
       id: gid + 1,
-      head_id: headIds[gid],
+      head_id,
+      member_id_1,
+      member_id_2,
       member_count,
       house_rank_1: prefs[0] ?? null,
       house_rank_2: prefs[1] ?? null,
@@ -109,36 +166,42 @@ function generateData(numGroups) {
   return { groups, houses };
 }
 
-// --- Export all tables to a single Excel file ---
-function exportAllTablesToExcel(filename, data, resultVa, resultVb) {
+function exportAllTablesToExcelTH(filename, data, resultVa, resultVb) {
   const wb = XLSX.utils.book_new();
 
-  // Summary Table
-  const summaryTable = document.getElementById("summary-table");
-  if (summaryTable) {
-    const ws1 = XLSX.utils.table_to_sheet(summaryTable);
-    XLSX.utils.book_append_sheet(wb, ws1, "Summary");
+  // Comparison Table
+  const comparisonTable = document.getElementById("comparison-table");
+  if (comparisonTable) {
+    const ws1 = XLSX.utils.table_to_sheet(comparisonTable);
+    XLSX.utils.book_append_sheet(wb, ws1, "ข้อมูลเปรียบเทียบ 2 Model");
   }
 
   // House Preference Table
   const housePrefTable = document.getElementById("house-pref-table");
   if (housePrefTable) {
     const ws2 = XLSX.utils.table_to_sheet(housePrefTable);
-    XLSX.utils.book_append_sheet(wb, ws2, "House Preference");
+    XLSX.utils.book_append_sheet(wb, ws2, "ข้อมูลบ้านที่ได้");
   }
 
   // Houses Table
   const housesTable = document.getElementById("houses-table");
   if (housesTable) {
     const ws3 = XLSX.utils.table_to_sheet(housesTable);
-    XLSX.utils.book_append_sheet(wb, ws3, "Houses");
+    XLSX.utils.book_append_sheet(wb, ws3, "ข้อมูลบ้าน");
   }
 
   // Groups Table
   const groupsTable = document.getElementById("groups-table");
   if (groupsTable) {
     const ws4 = XLSX.utils.table_to_sheet(groupsTable);
-    XLSX.utils.book_append_sheet(wb, ws4, "Groups");
+    XLSX.utils.book_append_sheet(wb, ws4, "ข้อมูลกลุ่ม");
+  }
+
+  // House Picked Table
+  const housePickedTable = document.getElementById("house-picked-table");
+  if (housePickedTable) {
+    const ws5 = XLSX.utils.table_to_sheet(housePickedTable);
+    XLSX.utils.book_append_sheet(wb, ws5, "ข้อมูลบ้านที่เลือก");
   }
 
   // House Members Tables
@@ -150,27 +213,31 @@ function exportAllTablesToExcel(filename, data, resultVa, resultVb) {
       const vb = resultVb[g.id];
       if (va) {
         if (!houseMembersVa[va]) houseMembersVa[va] = [];
-        houseMembersVa[va].push(...[g.head_id, ...(g.member_ids || [])]);
+        houseMembersVa[va].push(g.head_id);
+        if (g.member_id_1 != null) houseMembersVa[va].push(g.member_id_1);
+        if (g.member_id_2 != null) houseMembersVa[va].push(g.member_id_2);
       }
       if (vb) {
         if (!houseMembersVb[vb]) houseMembersVb[vb] = [];
-        houseMembersVb[vb].push(...[g.head_id, ...(g.member_ids || [])]);
+        houseMembersVb[vb].push(g.head_id);
+        if (g.member_id_1 != null) houseMembersVb[vb].push(g.member_id_1);
+        if (g.member_id_2 != null) houseMembersVb[vb].push(g.member_id_2);
       }
     }
     Object.entries(data.houses).forEach(([hid, h]) => {
       // Va
       const vaMembers = houseMembersVa[hid] || [];
-      const vaRows = [["Member IDs"]];
+      const vaRows = [["รหัส"]];
       vaMembers.forEach((mid) => vaRows.push([mid]));
       const vaSheet = XLSX.utils.aoa_to_sheet(vaRows);
-      XLSX.utils.book_append_sheet(wb, vaSheet, `${h.houseName} (Va)`);
+      XLSX.utils.book_append_sheet(wb, vaSheet, `ข้อมูล${h.houseName}(Va)`);
 
       // Vb
       const vbMembers = houseMembersVb[hid] || [];
-      const vbRows = [["Member IDs"]];
+      const vbRows = [["รหัส"]];
       vbMembers.forEach((mid) => vbRows.push([mid]));
       const vbSheet = XLSX.utils.aoa_to_sheet(vbRows);
-      XLSX.utils.book_append_sheet(wb, vbSheet, `${h.houseName} (Vb)`);
+      XLSX.utils.book_append_sheet(wb, vbSheet, `ข้อมูล${h.houseName} (Vb)`);
     });
   }
 
@@ -196,9 +263,12 @@ export default function AssignPanel() {
       for (let i = 0; i < housesArr.length; i++) {
         houses[i + 1] = housesArr[i];
       }
+      // Map fixed groups to use member_id_1, member_id_2 directly
       const groups = FIXED_GROUPS.map((g, idx) => ({
         id: g.id ?? idx + 1,
         head_id: g.head_id,
+        member_id_1: g.member_id_1 ?? null,
+        member_id_2: g.member_id_2 ?? null,
         member_count: g.member_count,
         house_rank_1: g.house_rank_1,
         house_rank_2: g.house_rank_2,
@@ -309,35 +379,39 @@ export default function AssignPanel() {
         >
           {loadingVb ? "Assigning Vb..." : "Assign Groups Vb"}
         </button>
-        <button
-          onClick={() => {
-            setData(generateData(numGroups));
-            setResultVa(null);
-            setResultVb(null);
-          }}
-          disabled={loadingVa || loadingVb}
-          style={
-            loadingVa || loadingVb
-              ? secondaryButtonStyle
-              : { ...buttonStyle, backgroundColor: "#6c757d" }
-          }
-        >
-          Regenerate Data
-        </button>
-        {resultVa && resultVb && (
+        {FIXED_GROUPS.length == 0 && (
           <button
-            style={buttonStyle}
-            onClick={() =>
-              exportAllTablesToExcel(
-                "group-results.xlsx",
-                data,
-                resultVa,
-                resultVb
-              )
+            onClick={() => {
+              setData(generateData(numGroups));
+              setResultVa(null);
+              setResultVb(null);
+            }}
+            disabled={loadingVa || loadingVb}
+            style={
+              loadingVa || loadingVb
+                ? secondaryButtonStyle
+                : { ...buttonStyle, backgroundColor: "#6c757d" }
             }
           >
-            Export All Tables (Excel)
+            Regenerate Data
           </button>
+        )}
+        {resultVa && resultVb && (
+          <>
+            <button
+              style={{ ...buttonStyle, backgroundColor: "#28a745" }}
+              onClick={() =>
+                exportAllTablesToExcelTH(
+                  "RPKM68-Result.xlsx",
+                  data,
+                  resultVa,
+                  resultVb
+                )
+              }
+            >
+              Export All Tables
+            </button>
+          </>
         )}
       </div>
 
@@ -346,17 +420,16 @@ export default function AssignPanel() {
 
       {(resultVa || resultVb) && (
         <>
-          <h3>Summary Comparison</h3>
-
-          <table style={tableStyle} id="summary-table">
+          <h3>เปรียบเทียบสรุปผล</h3>
+          <table style={tableStyle} id="comparison-table">
             <thead>
               <tr>
-                <th style={headerStyle}>Rank</th>
-                <th style={headerStyle}>Va Count</th>
-                <th style={headerStyle}>Va %</th>
-                <th style={headerStyle}>Vb Count</th>
-                <th style={headerStyle}>Vb %</th>
-                <th style={headerStyle}>Difference</th>
+                <th style={headerStyle}>ลำดับที่ได้</th>
+                <th style={headerStyle}>จำนวน (Va)</th>
+                <th style={headerStyle}>เปอร์เซ็นต์ (Va)</th>
+                <th style={headerStyle}>จำนวน (Vb)</th>
+                <th style={headerStyle}>เปอร์เซ็นต์ (Vb)</th>
+                <th style={headerStyle}>ผลต่าง</th>
               </tr>
             </thead>
             <tbody>
@@ -477,33 +550,30 @@ export default function AssignPanel() {
             </tbody>
           </table>
 
-          <h3>House Preference Ranking Distribution</h3>
+          <h3>สถิติการเลือกบ้าน (จำนวนน้องที่ได้บ้านในแต่ละอันดับ)</h3>
           <table style={tableStyle} id="house-pref-table">
             <thead>
               <tr>
-                <th style={headerStyle}>#</th>
-                <th style={headerStyle}>House Name</th>
-                <th style={headerStyle}>Va Rank 1</th>
-                <th style={headerStyle}>Va Rank 2</th>
-                <th style={headerStyle}>Va Rank 3</th>
-                <th style={headerStyle}>Va Rank 4</th>
-                <th style={headerStyle}>Va Rank 5</th>
-                <th style={headerStyle}>Va Sub</th>
-                <th style={headerStyle}>Vb Rank 1</th>
-                <th style={headerStyle}>Vb Rank 2</th>
-                <th style={headerStyle}>Vb Rank 3</th>
-                <th style={headerStyle}>Vb Rank 4</th>
-                <th style={headerStyle}>Vb Rank 5</th>
-                <th style={headerStyle}>Vb Sub</th>
+                <th style={headerStyle}>ลำดับ</th>
+                <th style={headerStyle}>ชื่อบ้าน</th>
+                <th style={headerStyle}>ไซส์</th>
+                <th style={headerStyle}>ความจุ</th>
+                <th style={headerStyle}>Va อันดับ 1</th>
+                <th style={headerStyle}>Va อันดับ 2</th>
+                <th style={headerStyle}>Va อันดับ 3</th>
+                <th style={headerStyle}>Va อันดับ 4</th>
+                <th style={headerStyle}>Va อันดับ 5</th>
+                <th style={headerStyle}>Va สำรอง</th>
+                <th style={headerStyle}>Vb อันดับ 1</th>
+                <th style={headerStyle}>Vb อันดับ 2</th>
+                <th style={headerStyle}>Vb อันดับ 3</th>
+                <th style={headerStyle}>Vb อันดับ 4</th>
+                <th style={headerStyle}>Vb อันดับ 5</th>
+                <th style={headerStyle}>Vb สำรอง</th>
               </tr>
             </thead>
             <tbody>
               {Object.entries(data.houses).map(([hid, h], idx) => {
-                const totalMembers = data.groups.reduce(
-                  (sum, g) => sum + g.member_count,
-                  0
-                );
-
                 const countRank = (result, rank) => {
                   let count = 0;
                   for (const group of data.groups) {
@@ -536,9 +606,10 @@ export default function AssignPanel() {
                   }
                   return count;
                 };
-                const percent = (n) =>
-                  totalMembers > 0
-                    ? ` (${((n / totalMembers) * 100).toFixed(2)}%)`
+
+                const percentByCap = (n) =>
+                  h.capacity > 0
+                    ? ` (${((n / h.capacity) * 100).toFixed(2)}%)`
                     : "";
 
                 // Va
@@ -560,53 +631,55 @@ export default function AssignPanel() {
                   <tr key={hid}>
                     <td style={thTdStyle}>{idx + 1}</td>
                     <td style={thTdStyle}>{h.houseName}</td>
+                    <td style={thTdStyle}>{h.sizeName}</td>
+                    <td style={thTdStyle}>{h.capacity}</td>
                     <td style={thTdStyle}>
                       {vaRank1}
-                      {percent(vaRank1)}
+                      {percentByCap(vaRank1)}
                     </td>
                     <td style={thTdStyle}>
                       {vaRank2}
-                      {percent(vaRank2)}
+                      {percentByCap(vaRank2)}
                     </td>
                     <td style={thTdStyle}>
                       {vaRank3}
-                      {percent(vaRank3)}
+                      {percentByCap(vaRank3)}
                     </td>
                     <td style={thTdStyle}>
                       {vaRank4}
-                      {percent(vaRank4)}
+                      {percentByCap(vaRank4)}
                     </td>
                     <td style={thTdStyle}>
                       {vaRank5}
-                      {percent(vaRank5)}
+                      {percentByCap(vaRank5)}
                     </td>
                     <td style={thTdStyle}>
                       {vaSub}
-                      {percent(vaSub)}
+                      {percentByCap(vaSub)}
                     </td>
                     <td style={thTdStyle}>
                       {vbRank1}
-                      {percent(vbRank1)}
+                      {percentByCap(vbRank1)}
                     </td>
                     <td style={thTdStyle}>
                       {vbRank2}
-                      {percent(vbRank2)}
+                      {percentByCap(vbRank2)}
                     </td>
                     <td style={thTdStyle}>
                       {vbRank3}
-                      {percent(vbRank3)}
+                      {percentByCap(vbRank3)}
                     </td>
                     <td style={thTdStyle}>
                       {vbRank4}
-                      {percent(vbRank4)}
+                      {percentByCap(vbRank4)}
                     </td>
                     <td style={thTdStyle}>
                       {vbRank5}
-                      {percent(vbRank5)}
+                      {percentByCap(vbRank5)}
                     </td>
                     <td style={thTdStyle}>
                       {vbSub}
-                      {percent(vbSub)}
+                      {percentByCap(vbSub)}
                     </td>
                   </tr>
                 );
@@ -616,18 +689,66 @@ export default function AssignPanel() {
         </>
       )}
 
-      <h3>Houses Comparison</h3>
+      <h3>สถิติการเลือกบ้าน (จำนวนน้องที่เลือกแต่ละบ้านในแต่ละอันดับ)</h3>
+      <table style={tableStyle} id="house-picked-table">
+        <thead>
+          <tr>
+            <th style={headerStyle}>ลำดับ</th>
+            <th style={headerStyle}>ชื่อบ้าน</th>
+            <th style={headerStyle}>เลือกอันดับ 1</th>
+            <th style={headerStyle}>เลือกอันดับ 2</th>
+            <th style={headerStyle}>เลือกอันดับ 3</th>
+            <th style={headerStyle}>เลือกอันดับ 4</th>
+            <th style={headerStyle}>เลือกอันดับ 5</th>
+            <th style={headerStyle}>เลือกสำรอง</th>
+          </tr>
+        </thead>
+        <tbody>
+          {Object.entries(data.houses).map(([hid, h], idx) => {
+            const pickedRank = (rank) =>
+              data.groups.reduce(
+                (sum, g) =>
+                  g[`house_rank_${rank}`] &&
+                  parseInt(g[`house_rank_${rank}`]) === parseInt(hid)
+                    ? sum + (g.member_count || 0)
+                    : sum,
+                0
+              );
+            const pickedSub = data.groups.reduce(
+              (sum, g) =>
+                g.house_sub && parseInt(g.house_sub) === parseInt(hid)
+                  ? sum + (g.member_count || 0)
+                  : sum,
+              0
+            );
+            return (
+              <tr key={hid}>
+                <td style={thTdStyle}>{idx + 1}</td>
+                <td style={thTdStyle}>{h.houseName}</td>
+                <td style={thTdStyle}>{pickedRank(1)}</td>
+                <td style={thTdStyle}>{pickedRank(2)}</td>
+                <td style={thTdStyle}>{pickedRank(3)}</td>
+                <td style={thTdStyle}>{pickedRank(4)}</td>
+                <td style={thTdStyle}>{pickedRank(5)}</td>
+                <td style={thTdStyle}>{pickedSub}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+
+      <h3>เปรียบเทียบบ้าน</h3>
       <table style={tableStyle} id="houses-table">
         <thead>
           <tr>
-            <th style={headerStyle}>ID</th>
-            <th style={headerStyle}>Name</th>
-            <th style={headerStyle}>Size</th>
-            <th style={headerStyle}>Capacity</th>
-            <th style={headerStyle}>Va Assigned</th>
-            <th style={headerStyle}>Va Used %</th>
-            <th style={headerStyle}>Vb Assigned</th>
-            <th style={headerStyle}>Vb Used %</th>
+            <th style={headerStyle}>รหัสบ้าน</th>
+            <th style={headerStyle}>ชื่อบ้าน</th>
+            <th style={headerStyle}>ไซส์</th>
+            <th style={headerStyle}>ความจุ</th>
+            <th style={headerStyle}>Va ได้รับ</th>
+            <th style={headerStyle}>เปอร์เซ็นต์ (Va)</th>
+            <th style={headerStyle}>Vb ได้รับ</th>
+            <th style={headerStyle}>เปอร์เซ็นต์ (Vb)</th>
           </tr>
         </thead>
         <tbody>
@@ -664,25 +785,27 @@ export default function AssignPanel() {
         </tbody>
       </table>
 
-      <h3>Groups Assignment Results</h3>
+      <h3>ผลการจัดกลุ่ม</h3>
       <table style={tableStyle} id="groups-table">
         <thead>
           <tr>
-            <th style={headerStyle}>ID</th>
-            <th style={headerStyle}>Head ID</th>
-            <th style={headerStyle}>Size</th>
-            <th style={headerStyle}>Pref 1</th>
-            <th style={headerStyle}>Pref 2</th>
-            <th style={headerStyle}>Pref 3</th>
-            <th style={headerStyle}>Pref 4</th>
-            <th style={headerStyle}>Pref 5</th>
-            <th style={headerStyle}>Sub Pref</th>
-            <th style={headerStyle}>Va House ID</th>
-            <th style={headerStyle}>Va Assigned</th>
-            <th style={headerStyle}>Va Rank</th>
-            <th style={headerStyle}>Vb House ID</th>
-            <th style={headerStyle}>Vb Assigned</th>
-            <th style={headerStyle}>Vb Rank</th>
+            <th style={headerStyle}>รหัสกลุ่ม</th>
+            <th style={headerStyle}>รหัสหัวหน้า</th>
+            <th style={headerStyle}>รหัสสมาชิก 1</th>
+            <th style={headerStyle}>รหัสสมาชิก 2</th>
+            <th style={headerStyle}>จำนวน (คน)</th>
+            <th style={headerStyle}>อันดับ 1</th>
+            <th style={headerStyle}>อันดับ 2</th>
+            <th style={headerStyle}>อันดับ 3</th>
+            <th style={headerStyle}>อันดับ 4</th>
+            <th style={headerStyle}>อันดับ 5</th>
+            <th style={headerStyle}>สำรอง</th>
+            <th style={headerStyle}>รหัสบ้าน (Va)</th>
+            <th style={headerStyle}>ชื่อบ้าน (Va)</th>
+            <th style={headerStyle}>ลำดับที่ได้ (Va)</th>
+            <th style={headerStyle}>รหัสบ้าน (Vb)</th>
+            <th style={headerStyle}>ชื่อบ้าน (Vb)</th>
+            <th style={headerStyle}>ลำดับที่ได้ (Vb)</th>
           </tr>
         </thead>
         <tbody>
@@ -730,6 +853,8 @@ export default function AssignPanel() {
               <tr key={g.id}>
                 <td style={thTdStyle}>{g.id}</td>
                 <td style={thTdStyle}>{g.head_id}</td>
+                <td style={thTdStyle}>{g.member_id_1 ?? "-"}</td>
+                <td style={thTdStyle}>{g.member_id_2 ?? "-"}</td>
                 <td style={thTdStyle}>{g.member_count}</td>
                 <td style={thTdStyle}>{g.house_rank_1 ?? "-"}</td>
                 <td style={thTdStyle}>{g.house_rank_2 ?? "-"}</td>
