@@ -31,29 +31,33 @@ async def solve_va(request: Request):
     else:
         raise Exception("Invalid houses format")
 
-    assigned = {}  # เก็บผลลัพธ์การจัดกลุ่ม
-    assigned_house_total = {hid: 0 for hid in houses}  # บ้านแต่ละหลังมีคนเท่าไร
+    assigned = {}
+    assigned_house_total = {hid: 0 for hid in houses}
 
-    # ฟังก์ชันช่วยเช็คว่าบ้านยังรับได้หรือไม่
     def can_assign(hid, group_size):
         return assigned_house_total[hid] + group_size <= houses[hid]["capacity"]
 
-    # รอบที่ 1: พยายามยัดบ้านอันดับ 1 ที่ยังไม่เต็ม
     unassigned = []
     for g in groups:
         gid = g["id"]
-        prefs = g.get("preference", [])
+        # ดึง preference/subPreference จาก house_rank_1-5, house_sub
+        prefs = [g.get(f"house_rank_{i+1}") for i in range(5) if g.get(f"house_rank_{i+1}") is not None]
+        subs = [g.get("house_sub")] if g.get("house_sub") is not None else []
         top = prefs[0] if prefs else None
-        if top is not None and can_assign(top, g["size"]):
+        group_size = g.get("member_count", 1)
+        if top is not None and can_assign(top, group_size):
             assigned[gid] = top
-            assigned_house_total[top] += g["size"]
+            assigned_house_total[top] += group_size
         else:
-            unassigned.append(g)
+            unassigned.append({
+                "id": gid,
+                "prefs": prefs,
+                "subs": subs,
+                "member_count": group_size
+            })
 
-    # รอบที่ 2: ใช้ LP จัดให้คะแนนรวมสูงสุด (เฉพาะกลุ่มที่ยังไม่ลงบ้าน)
     if unassigned:
         prob = LpProblem("FullPreferenceAssignment", LpMaximize)
-
         x = {}
         allowed_houses_for_group = {}
         group_size_map = {}
@@ -61,18 +65,15 @@ async def solve_va(request: Request):
 
         for g in unassigned:
             gid = g["id"]
-            prefs = g.get("preference", [])[:5]
-            subs = g.get("subPreference", [])
+            prefs = g["prefs"]
+            subs = g["subs"]
             allowed = set(prefs) | set(subs)
-
             allowed_houses_for_group[gid] = allowed
-            group_size_map[gid] = g["size"]
+            group_size_map[gid] = g["member_count"]
             preference_index_cache[gid] = {h: i for i, h in enumerate(prefs)}
-
             for h in allowed:
                 x[(gid, h)] = LpVariable(f"x_{gid}_{h}", cat=LpBinary)
 
-        # Objective Function: รวมคะแนน preference/subPreference
         prob += lpSum(
             x[(gid, h)] * (
                 PREF_SCORES[preference_index_cache[gid][h]] if h in preference_index_cache[gid]
@@ -82,11 +83,9 @@ async def solve_va(request: Request):
             for h in allowed_houses_for_group[gid]
         ), "TotalPreferencePoints"
 
-        # constraint: ทุกกลุ่มต้องได้บ้าน 1 หลัง
         for gid in allowed_houses_for_group:
             prob += lpSum(x[(gid, h)] for h in allowed_houses_for_group[gid]) == 1
 
-        # constraint: ความจุบ้านห้ามเกิน capacity
         for h in houses:
             prob += (
                 lpSum(
@@ -96,9 +95,8 @@ async def solve_va(request: Request):
                 <= houses[h]["capacity"]
             )
 
-        prob.solve(PULP_CBC_CMD(msg=0))  # ปิด log
+        prob.solve(PULP_CBC_CMD(msg=0))
 
-        # เก็บผลลัพธ์จาก LP
         still_unassigned = []
         for g in unassigned:
             gid = g["id"]
@@ -106,7 +104,7 @@ async def solve_va(request: Request):
             for h in allowed_houses_for_group[gid]:
                 if x[(gid, h)].varValue is not None and x[(gid, h)].varValue > 0.5:
                     assigned[gid] = h
-                    assigned_house_total[h] += g["size"]
+                    assigned_house_total[h] += g["member_count"]
                     assigned_house = h
                     break
             if assigned_house is None:
@@ -116,29 +114,22 @@ async def solve_va(request: Request):
     else:
         unassigned = []
 
-    # รอบที่ 3: เหลือกลุ่มไหนยังไม่ลงบ้าน ให้พยายามยัด subPreference หรือบ้านว่าง
     for g in unassigned:
         gid = g["id"]
         assigned_house = None
-
-        # พยายามยัดบ้าน subPreference ก่อน
-        for h in g.get("subPreference", []):
-            if can_assign(h, g["size"]):
+        for h in g["subs"]:
+            if can_assign(h, g["member_count"]):
                 assigned[gid] = h
-                assigned_house_total[h] += g["size"]
+                assigned_house_total[h] += g["member_count"]
                 assigned_house = h
                 break
-
-        # ถ้ายังไม่ได้ ให้หาบ้านที่ยังว่าง
         if assigned_house is None:
             for h in houses:
-                if can_assign(h, g["size"]):
+                if can_assign(h, g["member_count"]):
                     assigned[gid] = h
-                    assigned_house_total[h] += g["size"]
+                    assigned_house_total[h] += g["member_count"]
                     assigned_house = h
                     break
-
-        # ถ้ายังไม่ได้จริงๆ ให้ None
         if assigned_house is None:
             assigned[gid] = None
 
@@ -168,16 +159,14 @@ async def solve_vb(request: Request):
 
     for g in groups:
         gid = g["id"]
-        prefs = g.get("preference", [])[:5]
-        subs = g.get("subPreference", [])
+        prefs = [g.get(f"house_rank_{i+1}") for i in range(5) if g.get(f"house_rank_{i+1}") is not None]
+        subs = [g.get("house_sub")] if g.get("house_sub") is not None else []
         allowed = set(prefs) | set(subs)
-        group_size_map[gid] = g["size"]
+        group_size_map[gid] = g.get("member_count", 1)
         preference_index_cache[gid] = {h: i for i, h in enumerate(prefs)}
-
         for h in allowed:
             x[(gid, h)] = LpVariable(f"x_{gid}_{h}", cat=LpBinary)
 
-    # objective function: รวมคะแนน preference/subPreference
     prob += lpSum(
         x[(gid, h)] * (
             PREF_SCORES[preference_index_cache[gid][h]] if h in preference_index_cache[gid]
@@ -186,11 +175,9 @@ async def solve_vb(request: Request):
         for (gid, h) in x
     ), "TotalPreferencePoints"
 
-    # constraint: กลุ่มต้องได้บ้านเดียว
     for gid in group_size_map:
         prob += lpSum(x[(gid, h)] for (gidx, h) in x if gidx == gid) == 1
 
-    # constraint: ความจุบ้านห้ามเกิน capacity
     for h in houses:
         prob += lpSum(
             x[(gid, h)] * group_size_map[gid]
@@ -199,15 +186,16 @@ async def solve_vb(request: Request):
 
     prob.solve(PULP_CBC_CMD(msg=0))
 
-    # ตีความผลลัพธ์
     for g in groups:
         gid = g["id"]
         assigned_house = None
-        allowed_houses = set(g.get("preference", [])[:5]) | set(g.get("subPreference", []))
+        prefs = [g.get(f"house_rank_{i+1}") for i in range(5) if g.get(f"house_rank_{i+1}") is not None]
+        subs = [g.get("house_sub")] if g.get("house_sub") is not None else []
+        allowed_houses = set(prefs) | set(subs)
         for h in allowed_houses:
             if x.get((gid, h)) and x[(gid, h)].varValue == 1:
                 result[gid] = h
-                remaining_capacity[h] -= g["size"]
+                remaining_capacity[h] -= g.get("member_count", 1)
                 assigned_house = h
                 break
         if assigned_house is None:
