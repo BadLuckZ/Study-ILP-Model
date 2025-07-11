@@ -136,7 +136,7 @@ function generateRandomGroups(numGroups, numHouses, housesObj) {
       .map(([id]) => parseInt(id));
     const subPreference = shuffle(
       xl2xlHouses.filter((id) => !prefs.includes(id))
-    ).slice(0, 1);
+    ).slice(0, Math.random() < 0.7 ? 1 : 0);
 
     groups.push({
       id: gid + 1,
