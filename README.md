@@ -26,7 +26,7 @@ If hitting the submit button and the model thinks for a while without giving a r
 - The problem is impossible so it explodes itself.
 - It's gone into "hallucination mode" I dunno why.
 
-A restart in this terminal usually solve it. Ctrl+C in the terminal running uvicorn, and then run uvicorn main:app --reload again.
+A restart in this terminal usually solve it. `Ctrl+C` in the terminal running uvicorn, and then run `uvicorn main:app --reload` again.
 
 4. Open another terminal at root directory then run...
 
