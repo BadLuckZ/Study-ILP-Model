@@ -17,6 +17,7 @@ npm install
 ```sh
 cd ilp-api
 pip install fastapi uvicorn
+pip install uvicorn
 uvicorn main:app --reload
 ```
 
