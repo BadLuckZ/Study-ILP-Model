@@ -14,9 +14,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ค่าคะแนนของ preference (อันดับ 1-5)
-PREF_SCORES = [250, 120, 50, 20, 12]
+PREF_SCORES = [250, 120, 50, 20, 12] # คะแนน preference (อันดับ 1-5)
 SUB_PREF_SCORE = -1000  # คะแนน subPreference
+TIME_LIMIT = 10
 
 # -------------------- ปลายทาง solve_va --------------------
 @app.post("/api/solve_va")
@@ -95,22 +95,26 @@ async def solve_va(request: Request):
                 <= houses[h]["capacity"]
             )
 
-        prob.solve(PULP_CBC_CMD(msg=0))
-
-        still_unassigned = []
-        for g in unassigned:
-            gid = g["id"]
-            assigned_house = None
-            for h in allowed_houses_for_group[gid]:
-                if x[(gid, h)].varValue is not None and x[(gid, h)].varValue > 0.5:
-                    assigned[gid] = h
-                    assigned_house_total[h] += g["member_count"]
-                    assigned_house = h
-                    break
-            if assigned_house is None:
-                still_unassigned.append(g)
-
-        unassigned = still_unassigned
+        solver = PULP_CBC_CMD(msg=0, timeLimit=TIME_LIMIT)
+        status = prob.solve(solver)
+        
+        if status in [LpStatusOptimal, LpStatusNotSolved]:
+            still_unassigned = []
+            for g in unassigned:
+                gid = g["id"]
+                assigned_house = None
+                for h in allowed_houses_for_group[gid]:
+                    if x[(gid, h)].varValue is not None and x[(gid, h)].varValue > 0.5:
+                        assigned[gid] = h
+                        assigned_house_total[h] += g["member_count"]
+                        assigned_house = h
+                        break
+                if assigned_house is None:
+                    still_unassigned.append(g)
+            unassigned = still_unassigned
+        else:
+            # หากไม่สามารถหาผลลัพธ์ได้เลย ให้ทำการจัดสรรแบบเดิม
+            pass
     else:
         unassigned = []
 
@@ -184,21 +188,26 @@ async def solve_vb(request: Request):
             for (gid, hh) in x if hh == h
         ) <= houses[h]["capacity"]
 
-    prob.solve(PULP_CBC_CMD(msg=0))
+    solver = PULP_CBC_CMD(msg=0, timeLimit=TIME_LIMIT)
+    status = prob.solve(solver)
 
-    for g in groups:
-        gid = g["id"]
-        assigned_house = None
-        prefs = [g.get(f"house_rank_{i+1}") for i in range(5) if g.get(f"house_rank_{i+1}") is not None]
-        subs = [g.get("house_sub")] if g.get("house_sub") is not None else []
-        allowed_houses = set(prefs) | set(subs)
-        for h in allowed_houses:
-            if x.get((gid, h)) and x[(gid, h)].varValue == 1:
-                result[gid] = h
-                remaining_capacity[h] -= g.get("member_count", 1)
-                assigned_house = h
-                break
-        if assigned_house is None:
-            result[gid] = None
+    if status in [LpStatusOptimal, LpStatusNotSolved]:
+        for g in groups:
+            gid = g["id"]
+            assigned_house = None
+            prefs = [g.get(f"house_rank_{i+1}") for i in range(5) if g.get(f"house_rank_{i+1}") is not None]
+            subs = [g.get("house_sub")] if g.get("house_sub") is not None else []
+            allowed_houses = set(prefs) | set(subs)
+            for h in allowed_houses:
+                if x.get((gid, h)) and x[(gid, h)].varValue == 1:
+                    result[gid] = h
+                    remaining_capacity[h] -= g.get("member_count", 1)
+                    assigned_house = h
+                    break
+            if assigned_house is None:
+                result[gid] = None
+    else:
+        for g in groups:
+            result[g["id"]] = None
 
     return JSONResponse(result)
