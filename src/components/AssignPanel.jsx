@@ -614,6 +614,185 @@ export default function AssignPanel() {
                   </tr>
                 );
               })}
+
+              {/* Summary Row */}
+              {(resultVa || resultVb) &&
+                (() => {
+                  const totalMembers = data.groups.reduce(
+                    (sum, g) => sum + g.member_count,
+                    0
+                  );
+                  const vaTotalCount = [
+                    "rank1",
+                    "rank2",
+                    "rank3",
+                    "rank4",
+                    "rank5",
+                    "subPref",
+                    "unranked",
+                  ].reduce((sum, key) => {
+                    const countPeople = (result, rankKey) => {
+                      let count = 0;
+                      for (const group of data.groups) {
+                        const assigned = result?.[group.id];
+                        if (!assigned) continue;
+                        if (
+                          rankKey === "rank1" &&
+                          group.house_rank_1 === assigned
+                        )
+                          count += group.member_count;
+                        else if (
+                          rankKey === "rank2" &&
+                          group.house_rank_2 === assigned
+                        )
+                          count += group.member_count;
+                        else if (
+                          rankKey === "rank3" &&
+                          group.house_rank_3 === assigned
+                        )
+                          count += group.member_count;
+                        else if (
+                          rankKey === "rank4" &&
+                          group.house_rank_4 === assigned
+                        )
+                          count += group.member_count;
+                        else if (
+                          rankKey === "rank5" &&
+                          group.house_rank_5 === assigned
+                        )
+                          count += group.member_count;
+                        else if (
+                          rankKey === "subPref" &&
+                          group.house_sub === assigned &&
+                          ![
+                            group.house_rank_1,
+                            group.house_rank_2,
+                            group.house_rank_3,
+                            group.house_rank_4,
+                            group.house_rank_5,
+                          ].includes(assigned)
+                        )
+                          count += group.member_count;
+                        else if (
+                          rankKey === "unranked" &&
+                          ![
+                            group.house_rank_1,
+                            group.house_rank_2,
+                            group.house_rank_3,
+                            group.house_rank_4,
+                            group.house_rank_5,
+                            group.house_sub,
+                          ].includes(assigned)
+                        )
+                          count += group.member_count;
+                      }
+                      return count;
+                    };
+                    return sum + countPeople(resultVa, key);
+                  }, 0);
+
+                  const vbTotalCount = [
+                    "rank1",
+                    "rank2",
+                    "rank3",
+                    "rank4",
+                    "rank5",
+                    "subPref",
+                    "unranked",
+                  ].reduce((sum, key) => {
+                    const countPeople = (result, rankKey) => {
+                      let count = 0;
+                      for (const group of data.groups) {
+                        const assigned = result?.[group.id];
+                        if (!assigned) continue;
+                        if (
+                          rankKey === "rank1" &&
+                          group.house_rank_1 === assigned
+                        )
+                          count += group.member_count;
+                        else if (
+                          rankKey === "rank2" &&
+                          group.house_rank_2 === assigned
+                        )
+                          count += group.member_count;
+                        else if (
+                          rankKey === "rank3" &&
+                          group.house_rank_3 === assigned
+                        )
+                          count += group.member_count;
+                        else if (
+                          rankKey === "rank4" &&
+                          group.house_rank_4 === assigned
+                        )
+                          count += group.member_count;
+                        else if (
+                          rankKey === "rank5" &&
+                          group.house_rank_5 === assigned
+                        )
+                          count += group.member_count;
+                        else if (
+                          rankKey === "subPref" &&
+                          group.house_sub === assigned &&
+                          ![
+                            group.house_rank_1,
+                            group.house_rank_2,
+                            group.house_rank_3,
+                            group.house_rank_4,
+                            group.house_rank_5,
+                          ].includes(assigned)
+                        )
+                          count += group.member_count;
+                        else if (
+                          rankKey === "unranked" &&
+                          ![
+                            group.house_rank_1,
+                            group.house_rank_2,
+                            group.house_rank_3,
+                            group.house_rank_4,
+                            group.house_rank_5,
+                            group.house_sub,
+                          ].includes(assigned)
+                        )
+                          count += group.member_count;
+                      }
+                      return count;
+                    };
+                    return sum + countPeople(resultVb, key);
+                  }, 0);
+
+                  const diff = vbTotalCount - vaTotalCount;
+
+                  return (
+                    <tr
+                      style={{ backgroundColor: "#f0f0f0", fontWeight: "bold" }}
+                    >
+                      <td style={{ ...thTdStyle, fontWeight: "bold" }}>รวม</td>
+                      <td style={{ ...thTdStyle, fontWeight: "bold" }}>
+                        {vaTotalCount}
+                      </td>
+                      <td style={{ ...thTdStyle, fontWeight: "bold" }}>
+                        {totalMembers > 0
+                          ? `${((vaTotalCount / totalMembers) * 100).toFixed(
+                              2
+                            )}%`
+                          : "0.00%"}
+                      </td>
+                      <td style={{ ...thTdStyle, fontWeight: "bold" }}>
+                        {vbTotalCount}
+                      </td>
+                      <td style={{ ...thTdStyle, fontWeight: "bold" }}>
+                        {totalMembers > 0
+                          ? `${((vbTotalCount / totalMembers) * 100).toFixed(
+                              2
+                            )}%`
+                          : "0.00%"}
+                      </td>
+                      <td style={{ ...thTdStyle, fontWeight: "bold" }}>
+                        {diff >= 0 ? `+${diff}` : `${diff}`}
+                      </td>
+                    </tr>
+                  );
+                })()}
             </tbody>
           </table>
 
