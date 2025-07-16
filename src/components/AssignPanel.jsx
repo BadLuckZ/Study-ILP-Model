@@ -11,19 +11,19 @@ const FIXED_HOUSES = [
   { houseName: "บ้านหลายใจ", sizeName: "S", capacity: 45 * 3 }, // 135
   { houseName: "บ้านอากาเป้", sizeName: "S", capacity: 32 * 3 }, // 96
   { houseName: "บ้านนอก", sizeName: "M", capacity: 61 * 3 }, // 183
-  { houseName: "บ้านจิ๊จ๊ะ", sizeName: "M", capacity: 67 * 3 }, // 201
-  { houseName: "บ้านเอช้วน", sizeName: "M", capacity: 83 * 3 }, // 249
-  { houseName: "บ้านโจ๊ะเด๊ะฮือซา", sizeName: "M", capacity: 99 * 3 }, // 297
+  { houseName: "บ้านจิ๊จ๊ะ", sizeName: "M", capacity: 68 * 3 }, // 204
+  { houseName: "บ้านเอช้วน", sizeName: "M", capacity: 82 * 3 }, // 246
+  { houseName: "บ้านโจ๊ะเด๊ะฮือซา", sizeName: "L", capacity: 99 * 3 }, // 297
   { houseName: "บ้านโบ้", sizeName: "S", capacity: 43 * 3 }, // 129
   { houseName: "บ้านอะอึ๋ม", sizeName: "M", capacity: 84 * 3 }, // 252
-  { houseName: "บ้านคิดส์", sizeName: "L", capacity: 70 * 3 }, // 210
+  { houseName: "บ้านคิดส์", sizeName: "M", capacity: 70 * 3 }, // 210
   { houseName: "บ้านแจ๋ว", sizeName: "L", capacity: 119 * 3 }, // 357
   { houseName: "บ้านสด", sizeName: "L", capacity: 108 * 3 }, // 324
   { houseName: "บ้านเฮา", sizeName: "L", capacity: 119 * 3 }, // 357
   { houseName: "บ้านคุ้ม", sizeName: "XL", capacity: 133 * 4 }, // 532
   { houseName: "บ้านโจ๋", sizeName: "XL", capacity: 198 * 4 }, // 792
   { houseName: "บ้านโซ้ยตี๋หลีหมวย", sizeName: "XL", capacity: 196 * 4 }, // 784
-  { houseName: "บ้านแรงส์", sizeName: "XXL", capacity: 312 * 4 }, // 1248
+  { houseName: "บ้านแรงส์", sizeName: "XXL", capacity: 222 * 4 }, // 888
   { houseName: "บ้านยิ้ม", sizeName: "XXL", capacity: 201 * 4 }, // 804
 ];
 
@@ -96,6 +96,19 @@ function shuffle(array) {
 function generateRandomGroups(numGroups, numHouses, housesObj) {
   const houseIds = Array.from({ length: numHouses }, (_, i) => i + 1);
 
+  // จัดกลุ่มบ้านตามไซส์
+  const housesBySize = {
+    S: [],
+    M: [],
+    L: [],
+    XL: [],
+    XXL: [],
+  };
+
+  Object.entries(housesObj).forEach(([id, house]) => {
+    housesBySize[house.sizeName].push(parseInt(id));
+  });
+
   const headIds = shuffle(
     Array.from({ length: numGroups }, (_, i) => 20000 + i + 1)
   );
@@ -130,10 +143,64 @@ function generateRandomGroups(numGroups, numHouses, housesObj) {
       nextMemberId++;
     }
 
-    const prefs = shuffle(houseIds).slice(0, weightedRandomPreference(5));
-    const xl2xlHouses = Object.entries(housesObj)
-      .filter(([id, h]) => h.sizeName === "XL" || h.sizeName === "XXL")
-      .map(([id]) => parseInt(id));
+    // สร้าง preference ตามสัดส่วน: S:30%, M:25%, L:25%, XL:10%, XXL:10%
+    const sizeWeights = {
+      S: 0.35,
+      M: 0.25,
+      L: 0.3,
+      XL: 0.05,
+      XXL: 0.05,
+    };
+
+    const getRandomHouseByWeight = (excludeIds = []) => {
+      const availableHouses = {
+        S: housesBySize.S.filter((id) => !excludeIds.includes(id)),
+        M: housesBySize.M.filter((id) => !excludeIds.includes(id)),
+        L: housesBySize.L.filter((id) => !excludeIds.includes(id)),
+        XL: housesBySize.XL.filter((id) => !excludeIds.includes(id)),
+        XXL: housesBySize.XXL.filter((id) => !excludeIds.includes(id)),
+      };
+
+      // คำนวณน้ำหนักใหม่สำหรับไซส์ที่ยังมีบ้านเหลือ
+      const availableSizes = Object.keys(availableHouses).filter(
+        (size) => availableHouses[size].length > 0
+      );
+
+      if (availableSizes.length === 0) return null;
+
+      const totalWeight = availableSizes.reduce(
+        (sum, size) => sum + sizeWeights[size],
+        0
+      );
+      let random = Math.random() * totalWeight;
+
+      for (const size of availableSizes) {
+        random -= sizeWeights[size];
+        if (random <= 0) {
+          const houses = availableHouses[size];
+          return houses[Math.floor(Math.random() * houses.length)];
+        }
+      }
+
+      // fallback
+      const fallbackSize = availableSizes[0];
+      const houses = availableHouses[fallbackSize];
+      return houses[Math.floor(Math.random() * houses.length)];
+    };
+
+    // สร้าง preference 5 อันดับ
+    const prefs = [];
+    const maxPrefs = weightedRandomPreference(5);
+
+    for (let i = 0; i < maxPrefs; i++) {
+      const house = getRandomHouseByWeight(prefs);
+      if (house) {
+        prefs.push(house);
+      }
+    }
+
+    // สร้าง sub preference จาก XL และ XXL ที่ยังไม่ได้เลือก
+    const xl2xlHouses = [...housesBySize.XL, ...housesBySize.XXL];
     const subPreference = shuffle(
       xl2xlHouses.filter((id) => !prefs.includes(id))
     ).slice(0, Math.random() < 0.7 ? 1 : 0);
@@ -695,6 +762,8 @@ export default function AssignPanel() {
           <tr>
             <th style={headerStyle}>ลำดับ</th>
             <th style={headerStyle}>ชื่อบ้าน</th>
+            <th style={headerStyle}>ไซส์</th>
+            <th style={headerStyle}>ความจุ</th>
             <th style={headerStyle}>เลือกอันดับ 1</th>
             <th style={headerStyle}>เลือกอันดับ 2</th>
             <th style={headerStyle}>เลือกอันดับ 3</th>
@@ -725,6 +794,8 @@ export default function AssignPanel() {
               <tr key={hid}>
                 <td style={thTdStyle}>{idx + 1}</td>
                 <td style={thTdStyle}>{h.houseName}</td>
+                <td style={thTdStyle}>{h.sizeName}</td>
+                <td style={thTdStyle}>{h.capacity}</td>
                 <td style={thTdStyle}>{pickedRank(1)}</td>
                 <td style={thTdStyle}>{pickedRank(2)}</td>
                 <td style={thTdStyle}>{pickedRank(3)}</td>

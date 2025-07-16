@@ -15,8 +15,8 @@ app.add_middleware(
 )
 
 # ค่าคะแนนของ preference (อันดับ 1-5)
-PREF_SCORES = [100, 50, 30, 15, 5]
-SUB_PREF_SCORE = 3  # คะแนน subPreference
+PREF_SCORES = [250, 120, 50, 20, 12]
+SUB_PREF_SCORE = -1000  # คะแนน subPreference
 
 # -------------------- ปลายทาง solve_va --------------------
 @app.post("/api/solve_va")
