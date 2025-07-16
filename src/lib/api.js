@@ -1,11 +1,32 @@
 export const assignGroupsVa = async (groups, houses) => {
   try {
+    let housesData;
+    if (Array.isArray(houses)) {
+      housesData = {};
+      houses.forEach((house, index) => {
+        housesData[index + 1] = {
+          ...house,
+          min: Math.floor(0.8 * house.capacity),
+          max: house.capacity,
+        };
+      });
+    } else {
+      housesData = {};
+      Object.entries(houses).forEach(([id, house]) => {
+        housesData[id] = {
+          ...house,
+          min: Math.floor(0.8 * house.capacity),
+          max: house.capacity,
+        };
+      });
+    }
+
     const response = await fetch("http://localhost:8000/api/solve_va", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ groups, houses }),
+      body: JSON.stringify({ groups, houses: housesData }),
     });
 
     if (!response.ok) {
