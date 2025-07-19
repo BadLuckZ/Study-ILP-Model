@@ -3,8 +3,8 @@ export const assignGroupsVa = async (groups, houses) => {
     let housesData;
     if (Array.isArray(houses)) {
       housesData = {};
-      houses.forEach((house, index) => {
-        housesData[index + 1] = {
+      houses.forEach((house) => {
+        housesData[house.id] = {
           ...house,
           min: Math.floor(0.8 * house.capacity),
           max: house.capacity,

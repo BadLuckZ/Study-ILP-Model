@@ -23,11 +23,11 @@ TIME_LIMIT = 15
 async def solve_va(request: Request):
     data = await request.json()
     groups = data["groups"]
-    
+
     if isinstance(data["houses"], dict):
-        houses = {int(k): v for k, v in data["houses"].items()}
+        houses = {k: v for k, v in data["houses"].items()}
     elif isinstance(data["houses"], list):
-        houses = {i+1: h for i, h in enumerate(data["houses"])}
+        houses = {h["id"]: h for h in data["houses"]}
     else:
         raise Exception("Invalid houses format")
 
@@ -263,11 +263,11 @@ async def solve_va(request: Request):
 async def solve_vb(request: Request):
     data = await request.json()
     groups = data["groups"]
-    
+
     if isinstance(data["houses"], dict):
-        houses = {int(k): v for k, v in data["houses"].items()}
+        houses = {k: v for k, v in data["houses"].items()}
     elif isinstance(data["houses"], list):
-        houses = {i: h for i, h in enumerate(data["houses"])}
+        houses = {h["id"]: h for h in data["houses"]}
     else:
         raise Exception("Invalid houses format")
 
