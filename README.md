@@ -35,3 +35,7 @@ A restart in this terminal usually solve it. `Ctrl+C` in the terminal running uv
 ```sh
 npm run dev
 ```
+
+---
+- There are [TODO.md](src/utils/TODO.md) so please follow it
+---
