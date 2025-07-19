@@ -1,6 +1,6 @@
 ### CUSTOMIZE For RPKM2025 Only!!!
 
-**_ Can be used as reference _**
+** Can be used as reference **
 
 - FIXED_GROUPS
 
@@ -12,5 +12,6 @@
   1. Use house.sql
   2. Convert the result from csv to json and paste in FIXED_HOUSES Array
 
-**_ Don't forget to change some weird values _**
+** Don't forget to change some weird values **
+
 Ex. "NULL" -> null
